@@ -201,6 +201,33 @@ git commit -m "Create 100-level match-3 game"
 gh repo create xiaoxiaole-100-levels --public --source . --remote origin --push
 ```
 
+### 部署到 GitHub Pages
+
+仓库已经包含 GitHub Actions 工作流：
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+默认在 `master` 分支有新提交时自动构建并部署到 GitHub Pages。
+
+要启用它，请在 GitHub 仓库页面执行：
+1. 打开 `Settings`
+2. 进入 `Pages`
+3. 在 `Build and deployment` 中选择 `GitHub Actions`
+
+由于仓库名是 `xiaoxiaole-100-levels`，Vite 已配置：
+
+```ts
+base: '/xiaoxiaole-100-levels/'
+```
+
+部署完成后，访问地址通常为：
+
+```text
+https://liao-can-jie.github.io/xiaoxiaole-100-levels/
+```
+
 ### 部署到静态托管
 
 构建产物在：
