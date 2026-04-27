@@ -130,6 +130,40 @@ leaderboard
 }
 ```
 
+### 5. Firestore 安全规则示例
+
+仓库附带了一份示例规则文件：
+
+```text
+firestore.rules.example
+```
+
+这份规则会做几件事：
+- 允许任何人读取排行榜
+- 限制排行榜文档字段结构与数据类型
+- 限制昵称长度、最高关卡范围、时间与分数范围
+- 禁止删除排行榜记录
+- 更新时只允许把成绩改成“更好”的版本
+
+> 注意：这份规则默认保护的是 `leaderboard` 集合。
+> 如果你把 `VITE_FIREBASE_COLLECTION` 改成了别的名字，需要把规则里的：
+>
+> ```text
+> match /leaderboard/{playerId}
+> ```
+>
+> 改成你的集合名。
+
+你可以把这份文件内容粘贴到 Firebase Console 的 Firestore Rules 编辑器中，或者在接入 Firebase CLI 后把它作为规则文件使用。
+
+即便这样，它依然只是“更安全的前端直连方案”，并不能真正防止伪造高分。因为客户端依然可以自己构造一个合法但虚假的分数请求。
+
+如果要做正式公开排行榜，建议进一步使用：
+- Firebase Authentication
+- App Check
+- Cloud Functions / 后端接口
+- 服务端重新计算或校验得分
+
 ### 4. Firestore 安全建议
 
 当前项目是前端直连 Firestore 的轻量实现，适合演示或个人项目。

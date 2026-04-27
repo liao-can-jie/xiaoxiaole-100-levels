@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isLeaderboardPayload() {
+      return request.resource.data.keys().hasOnly([
+          'id',
+          'name',
+          'totalScore',
+          'highestLevel',
+          'totalTimeMs',
+          'updatedAt'
+        ]) &&
+        request.resource.data.id is string &&
+        request.resource.data.name is string &&
+        request.resource.data.totalScore is int &&
+        request.resource.data.highestLevel is int &&
+        request.resource.data.totalTimeMs is int &&
+        request.resource.data.updatedAt is int &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 20 &&
+        request.resource.data.totalScore >= 0 &&
+        request.resource.data.totalScore <= 100000000 &&
+        request.resource.data.highestLevel >= 1 &&
+        request.resource.data.highestLevel <= 100 &&
+        request.resource.data.totalTimeMs >= 0 &&
+        request.resource.data.totalTimeMs <= 31536000000 &&
+        request.resource.data.updatedAt >= request.time.toMillis() - 300000 &&
+        request.resource.data.updatedAt <= request.time.toMillis() + 300000;
+    }
+
+    function isBetterThanStored() {
+      return request.resource.data.totalScore > resource.data.totalScore ||
+        (
+          request.resource.data.totalScore == resource.data.totalScore &&
+          request.resource.data.highestLevel > resource.data.highestLevel
+        ) ||
+        (
+          request.resource.data.totalScore == resource.data.totalScore &&
+          request.resource.data.highestLevel == resource.data.highestLevel &&
+          request.resource.data.totalTimeMs <= resource.data.totalTimeMs
+        );
+    }
+
+    match /leaderboard/{playerId} {
+      allow read: if true;
+
+      allow create: if isLeaderboardPayload() &&
+        request.resource.data.id == playerId;
+
+      allow update: if isLeaderboardPayload() &&
+        request.resource.data.id == playerId &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.name == resource.data.name &&
+        isBetterThanStored();
+
+      allow delete: if false;
+    }
+  }
+}
