@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import CampaignHero from './components/CampaignHero'
+import GameBoardStage from './components/GameBoardStage'
+import AmbientFxCanvas from './components/AmbientFxCanvas'
+import SideRail from './components/SideRail'
 import { attemptMove, createBoardForLevel } from './game/engine'
 import { getLevel, levels } from './game/levels'
 import type {
@@ -10,9 +14,9 @@ import type {
   Position,
   TileKind,
 } from './game/types'
-import { formatDurationMs, formatScore } from './lib/format'
 import { loadCampaign, saveCampaign, upsertLevelResult } from './lib/storage'
 import { fetchLeaderboard, leaderboardEnabled, submitLeaderboardScore } from './services/leaderboard'
+import type { BoardFxSignal } from './components/BoardFxCanvas'
 
 type GameStatus = 'playing' | 'won' | 'lost'
 
@@ -72,6 +76,8 @@ function App() {
   const [leaderboardNotice, setLeaderboardNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [playerNameInput, setPlayerNameInput] = useState(initialCampaign.playerName)
+  const [boardFxSignal, setBoardFxSignal] = useState<BoardFxSignal | null>(null)
+  const [boardFxCounter, setBoardFxCounter] = useState(0)
 
   const level = useMemo(() => getLevel(campaign.currentLevel), [campaign.currentLevel])
   const leaderboardAvailable = leaderboardEnabled()
@@ -93,6 +99,15 @@ function App() {
         }
 
         if (current.secondsLeft <= 1) {
+          setBoardFxCounter((counter) => counter + 1)
+          setBoardFxSignal({
+            id: boardFxCounter + 1,
+            kind: 'lose',
+            intensity: 1.2,
+            rows: level.rows,
+            columns: level.columns,
+          })
+
           return {
             ...current,
             secondsLeft: 0,
@@ -109,7 +124,7 @@ function App() {
     }, 1000)
 
     return () => window.clearInterval(timer)
-  }, [campaign.currentLevel, run.status])
+  }, [boardFxCounter, campaign.currentLevel, level.columns, level.rows, run.status])
 
   useEffect(() => {
     saveCampaign(campaign)
@@ -144,6 +159,26 @@ function App() {
     }
   }, [leaderboardAvailable])
 
+  function emitBoardFx(
+    kind: BoardFxSignal['kind'],
+    intensity: number,
+    positions?: { from?: Position; to?: Position },
+  ) {
+    setBoardFxCounter((counter) => {
+      const nextId = counter + 1
+      setBoardFxSignal({
+        id: nextId,
+        kind,
+        intensity,
+        rows: level.rows,
+        columns: level.columns,
+        from: positions?.from,
+        to: positions?.to,
+      })
+      return nextId
+    })
+  }
+
   function startLevel(levelId: number) {
     const nextLevelId = Math.min(campaign.unlockedLevel, Math.max(1, levelId))
 
@@ -152,10 +187,12 @@ function App() {
       currentLevel: nextLevelId,
     }))
     setRun(createLevelRun(nextLevelId))
+    setBoardFxSignal(null)
   }
 
   function restartLevel() {
     setRun(createLevelRun(campaign.currentLevel))
+    setBoardFxSignal(null)
   }
 
   function handleTileClick(position: Position) {
@@ -179,9 +216,11 @@ function App() {
       return
     }
 
-    const move = attemptMove(run.board, run.selected, position, level)
+    const previousSelection = run.selected
+    const move = attemptMove(run.board, previousSelection, position, level)
 
     if (!move.valid) {
+      emitBoardFx('invalid', 1, { from: previousSelection, to: position })
       setRun((current) => ({
         ...current,
         selected: null,
@@ -195,7 +234,16 @@ function App() {
       Math.max(0, move.chains - 1) * level.chainBonus +
       move.matchedGroups * 12
     const nextLevelScore = run.levelScore + earned
-    const nextMessage = `消除了 ${move.clearedTiles} 个宝石，形成 ${move.chains} 段连锁，获得 ${formatScore(earned)} 分${move.reshuffled ? '，棋盘已自动重排。' : '。'}`
+    const nextMessage = `消除了 ${move.clearedTiles} 个宝石，形成 ${move.chains} 段连锁，获得 ${Math.max(0, Math.round(earned)).toLocaleString('zh-CN')} 分${move.reshuffled ? '，棋盘已自动重排。' : '。'}`
+
+    emitBoardFx(move.chains >= 3 ? 'combo' : 'match', Math.max(1, move.chains + move.clearedTiles / 5), {
+      from: previousSelection,
+      to: position,
+    })
+
+    if (move.reshuffled) {
+      emitBoardFx('reshuffle', 1.4)
+    }
 
     if (nextLevelScore < level.targetScore) {
       setRun((current) => ({
@@ -213,6 +261,8 @@ function App() {
     const timeReward = run.secondsLeft * level.timeBonus
     const awardedScore = nextLevelScore + timeReward
     const recordImproved = shouldReplaceLevelRecord(awardedScore, elapsedTimeMs, currentRecord)
+
+    emitBoardFx('win', Math.max(1.4, move.chains + 1.4), { from: previousSelection, to: position })
 
     setCampaign((current) =>
       upsertLevelResult(
@@ -232,7 +282,7 @@ function App() {
       selected: null,
       levelScore: awardedScore,
       status: 'won',
-      message: `通关成功，剩余 ${run.secondsLeft} 秒，时间奖励 ${formatScore(timeReward)} 分。${recordImproved ? ' 已刷新本关最佳成绩。' : ' 本关最佳成绩未提升。'}`,
+      message: `通关成功，剩余 ${run.secondsLeft} 秒，时间奖励 ${Math.max(0, Math.round(timeReward)).toLocaleString('zh-CN')} 分。${recordImproved ? ' 已刷新本关最佳成绩。' : ' 本关最佳成绩未提升。'}`,
     }))
   }
 
@@ -266,209 +316,55 @@ function App() {
   const isFinalLevelCleared = run.status === 'won' && campaign.currentLevel === levels.length
 
   return (
-    <div className="app-shell">
-      <header className="hero-panel">
-        <div>
-          <p className="eyebrow">React + Vite + Firebase</p>
-          <h1>消消乐 100 关挑战</h1>
-          <p className="hero-copy">
-            共 {levels.length} 关，前 15 关为手工节奏关，后 85 关按规则递增生成；每关越快通关，累计最佳成绩越高。
-          </p>
-        </div>
-        <div className="campaign-card">
-          <div>
-            <span>累计积分</span>
-            <strong>{formatScore(campaign.totalScore)}</strong>
-          </div>
-          <div>
-            <span>已通关卡</span>
-            <strong>
-              {campaign.clearedLevels} / {levels.length}
-            </strong>
-          </div>
-          <div>
-            <span>累计用时</span>
-            <strong>{formatDurationMs(campaign.totalTimeMs)}</strong>
-          </div>
-        </div>
-      </header>
+    <div className="app-shell app-shell--fantasy">
+      <AmbientFxCanvas />
+      <div className="app-shell__veil" aria-hidden="true" />
+      <div className="app-shell__content">
+        <CampaignHero
+          clearedLevels={campaign.clearedLevels}
+          levelsCount={levels.length}
+          totalScore={campaign.totalScore}
+          totalTimeMs={campaign.totalTimeMs}
+        />
 
-      <main className="layout-grid">
-        <section className="game-panel card">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">第 {level.id} 关</p>
-              <h2>{level.name}</h2>
-              <p className="subtle-text">{level.summary}</p>
-            </div>
-            <div className={`status-pill status-${run.status}`}>
-              {run.status === 'playing' ? '进行中' : run.status === 'won' ? '已通关' : '失败'}
-            </div>
-          </div>
+        <main className="layout-grid">
+          <GameBoardStage
+            board={run.board}
+            boardFxSignal={boardFxSignal}
+            canAdvance={canAdvance}
+            canGoPrev={campaign.currentLevel > 1}
+            currentLevel={campaign.currentLevel}
+            currentRecord={currentRecord}
+            isFinalLevelCleared={isFinalLevelCleared}
+            level={level}
+            levelScore={run.levelScore}
+            message={run.message}
+            onNext={() => startLevel(campaign.currentLevel + 1)}
+            onPrev={() => startLevel(campaign.currentLevel - 1)}
+            onRestart={restartLevel}
+            onTileClick={handleTileClick}
+            progressPercent={progressPercent}
+            secondsLeft={run.secondsLeft}
+            selected={run.selected}
+            status={run.status}
+            tileTheme={tileTheme}
+          />
 
-          <div className="stats-grid">
-            <article>
-              <span>本关目标</span>
-              <strong>{formatScore(level.targetScore)}</strong>
-            </article>
-            <article>
-              <span>本关得分</span>
-              <strong>{formatScore(run.levelScore)}</strong>
-            </article>
-            <article>
-              <span>剩余时间</span>
-              <strong>{run.secondsLeft}s</strong>
-            </article>
-            <article>
-              <span>棋盘规模</span>
-              <strong>
-                {level.rows} × {level.columns}
-              </strong>
-            </article>
-          </div>
-
-          <div className="progress-block">
-            <div className="progress-meta">
-              <span>通关进度</span>
-              <span>{Math.floor(progressPercent)}%</span>
-            </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
-            </div>
-          </div>
-
-          <div
-            className="board"
-            style={{ gridTemplateColumns: `repeat(${level.columns}, minmax(0, 1fr))` }}
-          >
-            {run.board.map((row, rowIndex) =>
-              row.map((tile, colIndex) => {
-                const isSelected = run.selected?.row === rowIndex && run.selected?.col === colIndex
-                const theme = tileTheme[tile.kind]
-
-                return (
-                  <button
-                    key={tile.id}
-                    type="button"
-                    className={`tile ${theme.className} ${isSelected ? 'is-selected' : ''}`}
-                    onClick={() => handleTileClick({ row: rowIndex, col: colIndex })}
-                    aria-label={`${theme.label}色宝石 ${rowIndex + 1} 行 ${colIndex + 1} 列`}
-                  >
-                    <span>{theme.label}</span>
-                  </button>
-                )
-              }),
-            )}
-          </div>
-
-          <p className="message-box">{run.message}</p>
-
-          {currentRecord ? (
-            <p className="subtle-text best-record">
-              本关最佳：{formatScore(currentRecord.score)} 分，用时 {formatDurationMs(currentRecord.timeMs)}。
-            </p>
-          ) : null}
-
-          <div className="button-row">
-            <button type="button" className="action-button" onClick={restartLevel}>
-              重开本关
-            </button>
-            <button
-              type="button"
-              className="action-button secondary"
-              onClick={() => startLevel(campaign.currentLevel - 1)}
-              disabled={campaign.currentLevel === 1}
-            >
-              上一关
-            </button>
-            <button
-              type="button"
-              className="action-button"
-              onClick={() => startLevel(campaign.currentLevel + 1)}
-              disabled={!canAdvance}
-            >
-              下一关
-            </button>
-          </div>
-
-          {isFinalLevelCleared ? (
-            <p className="victory-note">你已经完成全部 100 关，可以提交最终总积分冲击排行榜。</p>
-          ) : null}
-        </section>
-
-        <aside className="side-column">
-          <section className="card level-panel">
-            <div className="panel-header compact">
-              <div>
-                <p className="eyebrow">关卡选择</p>
-                <h2>已解锁至 {campaign.unlockedLevel} 关</h2>
-              </div>
-            </div>
-            <div className="level-grid">
-              {levels.map((item) => {
-                const unlocked = item.id <= campaign.unlockedLevel
-                const active = item.id === campaign.currentLevel
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`level-chip ${active ? 'active' : ''}`}
-                    disabled={!unlocked}
-                    onClick={() => startLevel(item.id)}
-                  >
-                    {item.id}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-
-          <section className="card leaderboard-panel">
-            <div className="panel-header compact">
-              <div>
-                <p className="eyebrow">在线积分榜</p>
-                <h2>Firebase Leaderboard</h2>
-              </div>
-            </div>
-
-            <label className="input-group">
-              <span>玩家昵称</span>
-              <input
-                value={playerNameInput}
-                onChange={(event) => setPlayerNameInput(event.target.value)}
-                placeholder="输入 20 字以内昵称"
-                maxLength={20}
-              />
-            </label>
-
-            <button
-              type="button"
-              className="action-button"
-              onClick={handleSubmitScore}
-              disabled={!leaderboardAvailable || submitting}
-            >
-              {submitting ? '提交中...' : '提交累计积分'}
-            </button>
-
-            {leaderboardMessage ? <p className="subtle-text leaderboard-message">{leaderboardMessage}</p> : null}
-
-            <ol className="leaderboard-list">
-              {displayedLeaderboard.map((entry, index) => (
-                <li key={entry.id}>
-                  <div>
-                    <strong>#{index + 1} {entry.name}</strong>
-                    <span>
-                      通关 {entry.highestLevel} 关 / 用时 {formatDurationMs(entry.totalTimeMs)}
-                    </span>
-                  </div>
-                  <b>{formatScore(entry.totalScore)}</b>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </aside>
-      </main>
+          <SideRail
+            currentLevel={campaign.currentLevel}
+            leaderboard={displayedLeaderboard}
+            leaderboardAvailable={leaderboardAvailable}
+            leaderboardMessage={leaderboardMessage}
+            levels={levels}
+            onPlayerNameChange={setPlayerNameInput}
+            onSelectLevel={startLevel}
+            onSubmitScore={handleSubmitScore}
+            playerNameInput={playerNameInput}
+            submitting={submitting}
+            unlockedLevel={campaign.unlockedLevel}
+          />
+        </main>
+      </div>
     </div>
   )
 }
