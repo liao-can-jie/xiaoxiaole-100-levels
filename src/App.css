@@ -426,26 +426,108 @@
 }
 
 .tile__label {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  min-width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
+  padding: 0 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
   text-shadow: 0 2px 12px rgba(15, 23, 42, 0.45);
+  font-size: 12px;
+  letter-spacing: 0.03em;
 }
 
-.tile-ruby { background: linear-gradient(145deg, #fb7185, #be123c 68%, #7f1d1d); }
-.tile-amber { background: linear-gradient(145deg, #facc15, #f97316 66%, #9a3412); }
-.tile-emerald { background: linear-gradient(145deg, #4ade80, #16a34a 66%, #14532d); }
-.tile-sapphire { background: linear-gradient(145deg, #7dd3fc, #2563eb 68%, #172554); }
-.tile-violet { background: linear-gradient(145deg, #c084fc, #7c3aed 68%, #4c1d95); }
-.tile-rose { background: linear-gradient(145deg, #f9a8d4, #db2777 68%, #831843); }
-.tile-teal { background: linear-gradient(145deg, #5eead4, #0f766e 68%, #082f49); }
+.tile-ruby {
+  --gem-light: #ffc6d0;
+  --gem-mid: #fb7185;
+  --gem-dark: #7f1d1d;
+  --gem-glow: rgba(251, 113, 133, 0.7);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-amber {
+  --gem-light: #fde68a;
+  --gem-mid: #f59e0b;
+  --gem-dark: #9a3412;
+  --gem-glow: rgba(251, 191, 36, 0.72);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-emerald {
+  --gem-light: #bbf7d0;
+  --gem-mid: #22c55e;
+  --gem-dark: #14532d;
+  --gem-glow: rgba(74, 222, 128, 0.74);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-sapphire {
+  --gem-light: #bae6fd;
+  --gem-mid: #3b82f6;
+  --gem-dark: #172554;
+  --gem-glow: rgba(96, 165, 250, 0.76);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-violet {
+  --gem-light: #e9d5ff;
+  --gem-mid: #a855f7;
+  --gem-dark: #4c1d95;
+  --gem-glow: rgba(192, 132, 252, 0.8);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-rose {
+  --gem-light: #fbcfe8;
+  --gem-mid: #ec4899;
+  --gem-dark: #831843;
+  --gem-glow: rgba(244, 114, 182, 0.72);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.tile-teal {
+  --gem-light: #ccfbf1;
+  --gem-mid: #14b8a6;
+  --gem-dark: #134e4a;
+  --gem-glow: rgba(45, 212, 191, 0.74);
+  background: linear-gradient(145deg, var(--gem-light), var(--gem-mid) 62%, var(--gem-dark));
+}
+
+.gem-icon {
+  position: absolute;
+  inset: 14%;
+  z-index: 1;
+  width: 72%;
+  height: 72%;
+  filter: drop-shadow(0 10px 20px rgba(15, 23, 42, 0.24));
+}
+
+.gem-facet--outer {
+  fill: color-mix(in srgb, var(--gem-mid) 68%, white 32%);
+}
+
+.gem-facet--mid {
+  fill: color-mix(in srgb, var(--gem-light) 54%, var(--gem-mid) 46%);
+}
+
+.gem-facet--light {
+  fill: rgba(255, 255, 255, 0.72);
+}
+
+.gem-stroke {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.48);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .message-box {
   margin: 20px 0 0;

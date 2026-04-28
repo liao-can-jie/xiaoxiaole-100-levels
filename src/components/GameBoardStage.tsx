@@ -1,3 +1,4 @@
+import GemIcon from './GemIcon'
 import BoardFxCanvas, { type BoardFxSignal } from './BoardFxCanvas'
 import type { Board, LevelDefinition, LevelRecord, Position, TileKind } from '../game/types'
 import { formatDurationMs, formatScore } from '../lib/format'
@@ -112,6 +113,7 @@ export default function GameBoardStage({
                       onClick={() => onTileClick({ row: rowIndex, col: colIndex })}
                       aria-label={`${theme.label}色宝石 ${rowIndex + 1} 行 ${colIndex + 1} 列`}
                     >
+                      <GemIcon kind={tile.kind} />
                       <span className="tile__label">{theme.label}</span>
                     </button>
                   )
