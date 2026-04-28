@@ -109,6 +109,32 @@ VITE_FIREBASE_COLLECTION=leaderboard
 - `VITE_FIREBASE_COLLECTION` 默认为 `leaderboard`
 - 你可以改成自己的集合名，例如 `match3_ranking`
 
+### 2.1 GitHub Pages 的 Firebase 环境变量
+
+GitHub Pages 构建不会读取你本地的 `.env`，所以如果你希望线上页面也能使用 Firebase 排行榜，需要到仓库里配置同名的 Actions Variables：
+
+1. 打开仓库 `Settings`
+2. 进入 `Secrets and variables` → `Actions`
+3. 在 `Variables` 中添加以下键：
+
+```text
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+VITE_FIREBASE_COLLECTION
+```
+
+当前 GitHub Pages 工作流已经会在构建时把这些 `vars.*` 注入到 Vite：
+
+```text
+.github/workflows/deploy-pages.yml
+```
+
+如果这些变量没有配置，线上页面仍然可以正常玩，但 Firebase 在线排行榜会处于未启用状态。
+
 ### 3. Firestore 数据结构
 
 排行榜默认写入集合：
