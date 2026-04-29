@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import CampaignHero from './components/CampaignHero'
-import GameBoardStage from './components/GameBoardStage'
+import GameBoardStage, { type LevelClearSummary } from './components/GameBoardStage'
 import AmbientFxCanvas from './components/AmbientFxCanvas'
 import SideRail from './components/SideRail'
 import { attemptMove, createBoardForLevel } from './game/engine'
@@ -9,6 +9,7 @@ import { getLevel, levels } from './game/levels'
 import type {
   Board,
   CampaignSnapshot,
+  CreatedSpecial,
   LeaderboardEntry,
   LevelRecord,
   Position,
@@ -68,6 +69,21 @@ function shouldReplaceLevelRecord(
   return nextTimeMs < currentRecord.timeMs
 }
 
+function describeCreatedSpecials(createdSpecials: CreatedSpecial[]) {
+  if (createdSpecials.length === 0) {
+    return ''
+  }
+
+  const labelMap: Record<CreatedSpecial['specialType'], string> = {
+    row: '清行宝石',
+    column: '清列宝石',
+    bomb: '爆炸宝石',
+    rainbow: '彩虹宝石',
+  }
+
+  return ` 生成 ${createdSpecials.map((special) => labelMap[special.specialType]).join('、')}。`
+}
+
 function App() {
   const initialCampaign = loadCampaign()
   const [campaign, setCampaign] = useState<CampaignSnapshot>(initialCampaign)
@@ -77,7 +93,9 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
   const [playerNameInput, setPlayerNameInput] = useState(initialCampaign.playerName)
   const [boardFxSignal, setBoardFxSignal] = useState<BoardFxSignal | null>(null)
-  const [boardFxCounter, setBoardFxCounter] = useState(0)
+  const [clearSummary, setClearSummary] = useState<LevelClearSummary | null>(null)
+  const [createdSpecials, setCreatedSpecials] = useState<CreatedSpecial[]>([])
+  const boardFxCounterRef = useRef(0)
 
   const level = useMemo(() => getLevel(campaign.currentLevel), [campaign.currentLevel])
   const leaderboardAvailable = leaderboardEnabled()
@@ -86,6 +104,44 @@ function App() {
     ? leaderboardNotice
     : '请先复制 .env.example 为 .env，并填写 Firebase 参数后启用在线排行榜。'
   const displayedLeaderboard = leaderboardAvailable ? leaderboard : []
+
+  const emitBoardFx = useCallback(
+    (
+      kind: BoardFxSignal['kind'],
+      intensity: number,
+      positions?: { from?: Position; to?: Position },
+      specialType?: BoardFxSignal['specialType'],
+    ) => {
+      boardFxCounterRef.current += 1
+      setBoardFxSignal({
+        id: boardFxCounterRef.current,
+        kind,
+        intensity,
+        rows: level.rows,
+        columns: level.columns,
+        from: positions?.from,
+        to: positions?.to,
+        specialType,
+      })
+    },
+    [level.columns, level.rows],
+  )
+
+  const startLevel = useCallback(
+    (levelId: number) => {
+      const nextLevelId = Math.min(campaign.unlockedLevel, Math.max(1, levelId))
+
+      setCampaign((current) => ({
+        ...current,
+        currentLevel: nextLevelId,
+      }))
+      setRun(createLevelRun(nextLevelId))
+      setBoardFxSignal(null)
+      setClearSummary(null)
+      setCreatedSpecials([])
+    },
+    [campaign.unlockedLevel],
+  )
 
   useEffect(() => {
     if (run.status !== 'playing') {
@@ -99,15 +155,7 @@ function App() {
         }
 
         if (current.secondsLeft <= 1) {
-          setBoardFxCounter((counter) => counter + 1)
-          setBoardFxSignal({
-            id: boardFxCounter + 1,
-            kind: 'lose',
-            intensity: 1.2,
-            rows: level.rows,
-            columns: level.columns,
-          })
-
+          emitBoardFx('lose', 1.2)
           return {
             ...current,
             secondsLeft: 0,
@@ -124,7 +172,7 @@ function App() {
     }, 1000)
 
     return () => window.clearInterval(timer)
-  }, [boardFxCounter, campaign.currentLevel, level.columns, level.rows, run.status])
+  }, [emitBoardFx, run.status])
 
   useEffect(() => {
     saveCampaign(campaign)
@@ -159,40 +207,28 @@ function App() {
     }
   }, [leaderboardAvailable])
 
-  function emitBoardFx(
-    kind: BoardFxSignal['kind'],
-    intensity: number,
-    positions?: { from?: Position; to?: Position },
-  ) {
-    setBoardFxCounter((counter) => {
-      const nextId = counter + 1
-      setBoardFxSignal({
-        id: nextId,
-        kind,
-        intensity,
-        rows: level.rows,
-        columns: level.columns,
-        from: positions?.from,
-        to: positions?.to,
-      })
-      return nextId
-    })
-  }
+  useEffect(() => {
+    if (!clearSummary || campaign.currentLevel >= levels.length) {
+      return
+    }
 
-  function startLevel(levelId: number) {
-    const nextLevelId = Math.min(campaign.unlockedLevel, Math.max(1, levelId))
+    const timer = window.setTimeout(() => {
+      setClearSummary(null)
+      startLevel(campaign.currentLevel + 1)
+    }, 2200)
 
-    setCampaign((current) => ({
-      ...current,
-      currentLevel: nextLevelId,
-    }))
-    setRun(createLevelRun(nextLevelId))
-    setBoardFxSignal(null)
-  }
+    return () => window.clearTimeout(timer)
+  }, [campaign.currentLevel, clearSummary, startLevel])
 
   function restartLevel() {
     setRun(createLevelRun(campaign.currentLevel))
     setBoardFxSignal(null)
+    setClearSummary(null)
+    setCreatedSpecials([])
+  }
+
+  function handleDismissClearSummary() {
+    setClearSummary(null)
   }
 
   function handleTileClick(position: Position) {
@@ -229,17 +265,33 @@ function App() {
       return
     }
 
+    setCreatedSpecials(move.createdSpecials)
+
+    for (const special of move.createdSpecials) {
+      emitBoardFx(
+        'special-created',
+        special.specialType === 'rainbow' ? 2.2 : 1.5,
+        { to: special.position },
+        special.specialType,
+      )
+    }
+
     const earned =
       move.clearedTiles * level.pointsPerTile +
       Math.max(0, move.chains - 1) * level.chainBonus +
-      move.matchedGroups * 12
+      move.matchedGroups * 12 +
+      move.createdSpecials.length * 80
     const nextLevelScore = run.levelScore + earned
-    const nextMessage = `消除了 ${move.clearedTiles} 个宝石，形成 ${move.chains} 段连锁，获得 ${Math.max(0, Math.round(earned)).toLocaleString('zh-CN')} 分${move.reshuffled ? '，棋盘已自动重排。' : '。'}`
+    const nextMessage = `消除了 ${move.clearedTiles} 个宝石，形成 ${move.chains} 段连锁，获得 ${Math.max(0, Math.round(earned)).toLocaleString('zh-CN')} 分。${describeCreatedSpecials(move.createdSpecials)}${move.reshuffled ? ' 棋盘已自动重排。' : ''}`
 
-    emitBoardFx(move.chains >= 3 ? 'combo' : 'match', Math.max(1, move.chains + move.clearedTiles / 5), {
-      from: previousSelection,
-      to: position,
-    })
+    emitBoardFx(
+      move.chains >= 3 ? 'combo' : 'match',
+      Math.max(1, move.chains + move.clearedTiles / 5 + move.createdSpecials.length * 0.6),
+      {
+        from: previousSelection,
+        to: position,
+      },
+    )
 
     if (move.reshuffled) {
       emitBoardFx('reshuffle', 1.4)
@@ -262,7 +314,14 @@ function App() {
     const awardedScore = nextLevelScore + timeReward
     const recordImproved = shouldReplaceLevelRecord(awardedScore, elapsedTimeMs, currentRecord)
 
-    emitBoardFx('win', Math.max(1.4, move.chains + 1.4), { from: previousSelection, to: position })
+    emitBoardFx(
+      'win',
+      Math.max(1.6, move.chains + 1.6 + move.createdSpecials.length * 0.8),
+      {
+        from: previousSelection,
+        to: position,
+      },
+    )
 
     setCampaign((current) =>
       upsertLevelResult(
@@ -276,6 +335,19 @@ function App() {
         playerNameInput,
       ),
     )
+
+    setClearSummary({
+      levelId: level.id,
+      levelName: level.name,
+      awardedScore,
+      timeReward,
+      secondsLeft: run.secondsLeft,
+      chains: move.chains,
+      clearedTiles: move.clearedTiles,
+      recordImproved,
+      createdSpecials: move.createdSpecials,
+    })
+
     setRun((current) => ({
       ...current,
       board: move.board,
@@ -333,12 +405,15 @@ function App() {
             boardFxSignal={boardFxSignal}
             canAdvance={canAdvance}
             canGoPrev={campaign.currentLevel > 1}
+            clearSummary={clearSummary}
             currentLevel={campaign.currentLevel}
             currentRecord={currentRecord}
+            createdSpecials={createdSpecials}
             isFinalLevelCleared={isFinalLevelCleared}
             level={level}
             levelScore={run.levelScore}
             message={run.message}
+            onDismissClearSummary={handleDismissClearSummary}
             onNext={() => startLevel(campaign.currentLevel + 1)}
             onPrev={() => startLevel(campaign.currentLevel - 1)}
             onRestart={restartLevel}

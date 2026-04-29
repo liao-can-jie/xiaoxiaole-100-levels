@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import type { Position } from '../game/types'
+import type { Position, SpecialType } from '../game/types'
 import useReducedMotion from '../hooks/useReducedMotion'
 
-export type BoardFxKind = 'invalid' | 'match' | 'combo' | 'reshuffle' | 'win' | 'lose'
+export type BoardFxKind = 'invalid' | 'match' | 'combo' | 'reshuffle' | 'win' | 'lose' | 'special-created'
 
 export type BoardFxSignal = {
   id: number
@@ -12,6 +12,7 @@ export type BoardFxSignal = {
   columns: number
   from?: Position
   to?: Position
+  specialType?: SpecialType
 }
 
 type ParticleShape = 'orb' | 'shard' | 'streak'
@@ -64,6 +65,7 @@ const palette: Record<BoardFxKind, PaletteEntry> = {
   reshuffle: { base: [251, 191, 36], glow: [250, 204, 21], accent: [254, 249, 195] },
   win: { base: [74, 222, 128], glow: [45, 212, 191], accent: [220, 252, 231] },
   lose: { base: [248, 113, 113], glow: [244, 114, 182], accent: [254, 205, 211] },
+  'special-created': { base: [250, 204, 21], glow: [244, 114, 182], accent: [224, 231, 255] },
 }
 
 function rgba(color: [number, number, number], alpha: number) {
@@ -398,6 +400,26 @@ export default function BoardFxCanvas({
       })
     }
 
+    if (signal.kind === 'special-created') {
+      ripplesRef.current.push({
+        x: center.x,
+        y: center.y,
+        radius: Math.min(bounds.width, bounds.height) * 0.018,
+        maxRadius: rippleSize * 1.1,
+        alpha: 0.74,
+        color: colors.accent,
+        lineWidth: signal.specialType === 'rainbow' ? 5 : 3,
+      })
+      glowPulsesRef.current.push({
+        x: center.x,
+        y: center.y,
+        radius: Math.min(bounds.width, bounds.height) * 0.025,
+        maxRadius: rippleSize * 1.45,
+        alpha: 0.3,
+        color: signal.specialType === 'rainbow' ? colors.accent : colors.glow,
+      })
+    }
+
     pushBurst(
       particlesRef.current,
       center,
@@ -419,6 +441,17 @@ export default function BoardFxCanvas({
         signal.intensity + 0.6,
         colors,
         'orb',
+      )
+    }
+
+    if (signal.kind === 'special-created') {
+      pushBurst(
+        particlesRef.current,
+        center,
+        Math.max(10, Math.round(particleCount * 0.55)),
+        signal.intensity + 0.3,
+        colors,
+        signal.specialType === 'rainbow' ? 'orb' : 'shard',
       )
     }
   }, [reducedMotion, signal])

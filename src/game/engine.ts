@@ -1,8 +1,12 @@
 import type {
   Board,
   CascadeResolution,
+  CreatedSpecial,
   LevelDefinition,
+  MatchGroup,
+  MatchPattern,
   Position,
+  SpecialType,
   Tile,
   TileKind,
 } from './types'
@@ -14,10 +18,17 @@ export type MoveResult = CascadeResolution & {
 
 type MutableBoard = (Tile | null)[][]
 
-function createTile(kind: TileKind): Tile {
+type RawLineMatch = {
+  axis: 'row' | 'col'
+  kind: TileKind
+  positions: Position[]
+}
+
+function createTile(kind: TileKind, specialType?: SpecialType): Tile {
   return {
     id: crypto.randomUUID(),
     kind,
+    specialType,
   }
 }
 
@@ -64,8 +75,8 @@ export function isAdjacent(a: Position, b: Position): boolean {
   return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1
 }
 
-export function findMatches(board: Board): Position[][] {
-  const matches: Position[][] = []
+function findLineMatches(board: Board): RawLineMatch[] {
+  const matches: RawLineMatch[] = []
   const rows = board.length
   const columns = board[0]?.length ?? 0
 
@@ -80,12 +91,14 @@ export function findMatches(board: Board): Position[][] {
       }
 
       if (col - start >= 3) {
-        matches.push(
-          Array.from({ length: col - start }, (_, index) => ({
+        matches.push({
+          axis: 'row',
+          kind: board[row][start].kind,
+          positions: Array.from({ length: col - start }, (_, index) => ({
             row,
             col: start + index,
           })),
-        )
+        })
       }
 
       start = col
@@ -103,12 +116,14 @@ export function findMatches(board: Board): Position[][] {
       }
 
       if (row - start >= 3) {
-        matches.push(
-          Array.from({ length: row - start }, (_, index) => ({
+        matches.push({
+          axis: 'col',
+          kind: board[start][col].kind,
+          positions: Array.from({ length: row - start }, (_, index) => ({
             row: start + index,
             col,
           })),
-        )
+        })
       }
 
       start = row
@@ -118,31 +133,143 @@ export function findMatches(board: Board): Position[][] {
   return matches
 }
 
-function uniqueMatchedPositions(groups: Position[][]): Position[] {
-  const seen = new Set<string>()
-  const unique: Position[] = []
+function matchPatternFromLine(length: number): MatchPattern {
+  if (length >= 5) {
+    return 'line-5'
+  }
 
-  for (const group of groups) {
-    for (const position of group) {
-      const key = `${position.row}:${position.col}`
+  if (length === 4) {
+    return 'line-4'
+  }
 
-      if (seen.has(key)) {
+  return 'line-3'
+}
+
+function classifyMatchGroups(lineMatches: RawLineMatch[]): MatchGroup[] {
+  const groups = lineMatches.map<MatchGroup>((match) => ({
+    kind: match.kind,
+    pattern: matchPatternFromLine(match.positions.length),
+    positions: match.positions,
+  }))
+
+  for (let index = 0; index < lineMatches.length; index += 1) {
+    for (let compareIndex = index + 1; compareIndex < lineMatches.length; compareIndex += 1) {
+      const first = lineMatches[index]
+      const second = lineMatches[compareIndex]
+
+      if (first.kind !== second.kind || first.axis === second.axis) {
         continue
       }
 
-      seen.add(key)
-      unique.push(position)
+      const overlap = first.positions.filter((position) =>
+        second.positions.some((candidate) => candidate.row === position.row && candidate.col === position.col),
+      )
+
+      if (overlap.length === 0) {
+        continue
+      }
+
+      const firstLength = first.positions.length
+      const secondLength = second.positions.length
+      const pattern: MatchPattern = firstLength >= 3 && secondLength >= 3
+        ? firstLength === 3 || secondLength === 3
+          ? 't-shape'
+          : 'l-shape'
+        : 'line-3'
+
+      groups[index] = {
+        kind: first.kind,
+        pattern,
+        positions: dedupePositions([...groups[index].positions, ...second.positions]),
+      }
+
+      groups[compareIndex] = {
+        kind: second.kind,
+        pattern,
+        positions: dedupePositions([...groups[compareIndex].positions, ...first.positions]),
+      }
     }
+  }
+
+  return groups
+}
+
+function dedupePositions(positions: Position[]): Position[] {
+  const seen = new Set<string>()
+  const unique: Position[] = []
+
+  for (const position of positions) {
+    const key = `${position.row}:${position.col}`
+
+    if (seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    unique.push(position)
   }
 
   return unique
 }
 
-function clearMatches(board: Board, positions: Position[]): MutableBoard {
+export function findMatches(board: Board): Position[][] {
+  return findLineMatches(board).map((match) => match.positions)
+}
+
+export function analyzeMatches(board: Board): MatchGroup[] {
+  return classifyMatchGroups(findLineMatches(board))
+}
+
+function uniqueMatchedPositions(groups: MatchGroup[]): Position[] {
+  return dedupePositions(groups.flatMap((group) => group.positions))
+}
+
+function determineSpecialType(group: MatchGroup): SpecialType | null {
+  switch (group.pattern) {
+    case 'line-4':
+      return group.positions.every((position) => position.row === group.positions[0].row) ? 'row' : 'column'
+    case 'line-5':
+      return 'rainbow'
+    case 't-shape':
+    case 'l-shape':
+      return 'bomb'
+    default:
+      return null
+  }
+}
+
+function chooseCreatedSpecial(group: MatchGroup): CreatedSpecial | null {
+  const specialType = determineSpecialType(group)
+
+  if (!specialType) {
+    return null
+  }
+
+  const anchor = group.positions[Math.floor(group.positions.length / 2)]
+
+  return {
+    position: anchor,
+    kind: group.kind,
+    specialType,
+  }
+}
+
+function clearMatches(board: Board, positions: Position[], createdSpecials: CreatedSpecial[]): MutableBoard {
   const nextBoard = cloneBoard(board) as MutableBoard
+  const preservedKeys = new Set(createdSpecials.map((special) => `${special.position.row}:${special.position.col}`))
 
   for (const position of positions) {
+    const key = `${position.row}:${position.col}`
+
+    if (preservedKeys.has(key)) {
+      continue
+    }
+
     nextBoard[position.row][position.col] = null
+  }
+
+  for (const special of createdSpecials) {
+    nextBoard[special.position.row][special.position.col] = createTile(special.kind, special.specialType)
   }
 
   return nextBoard
@@ -182,21 +309,30 @@ export function resolveBoard(board: Board, tileKinds: TileKind[]): CascadeResolu
   let clearedTiles = 0
   let chains = 0
   let matchedGroups = 0
+  const allMatchGroups: MatchGroup[] = []
+  const allCreatedSpecials: CreatedSpecial[] = []
 
   while (true) {
-    const matches = findMatches(currentBoard)
+    const matchGroups = analyzeMatches(currentBoard)
 
-    if (matches.length === 0) {
+    if (matchGroups.length === 0) {
       break
     }
 
     chains += 1
-    matchedGroups += matches.length
+    matchedGroups += matchGroups.length
+    allMatchGroups.push(...matchGroups)
 
-    const uniquePositions = uniqueMatchedPositions(matches)
+    const uniquePositions = uniqueMatchedPositions(matchGroups)
     clearedTiles += uniquePositions.length
 
-    const clearedBoard = clearMatches(currentBoard, uniquePositions)
+    const createdSpecials = matchGroups
+      .map(chooseCreatedSpecial)
+      .filter((special): special is CreatedSpecial => special !== null)
+
+    allCreatedSpecials.push(...createdSpecials)
+
+    const clearedBoard = clearMatches(currentBoard, uniquePositions, createdSpecials)
     currentBoard = collapseBoard(clearedBoard, tileKinds)
   }
 
@@ -205,6 +341,8 @@ export function resolveBoard(board: Board, tileKinds: TileKind[]): CascadeResolu
     clearedTiles,
     chains,
     matchedGroups,
+    matchGroups: allMatchGroups,
+    createdSpecials: allCreatedSpecials,
   }
 }
 
@@ -268,6 +406,8 @@ export function attemptMove(
       clearedTiles: 0,
       chains: 0,
       matchedGroups: 0,
+      matchGroups: [],
+      createdSpecials: [],
       reshuffled: false,
     }
   }
@@ -281,6 +421,8 @@ export function attemptMove(
       clearedTiles: 0,
       chains: 0,
       matchedGroups: 0,
+      matchGroups: [],
+      createdSpecials: [],
       reshuffled: false,
     }
   }

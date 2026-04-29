@@ -1,21 +1,43 @@
 import GemIcon from './GemIcon'
 import BoardFxCanvas, { type BoardFxSignal } from './BoardFxCanvas'
-import type { Board, LevelDefinition, LevelRecord, Position, TileKind } from '../game/types'
+import type {
+  Board,
+  CreatedSpecial,
+  LevelDefinition,
+  LevelRecord,
+  Position,
+  TileKind,
+} from '../game/types'
 import { formatDurationMs, formatScore } from '../lib/format'
 
 type GameStatus = 'playing' | 'won' | 'lost'
+
+export type LevelClearSummary = {
+  levelId: number
+  levelName: string
+  awardedScore: number
+  timeReward: number
+  secondsLeft: number
+  chains: number
+  clearedTiles: number
+  recordImproved: boolean
+  createdSpecials: CreatedSpecial[]
+}
 
 export default function GameBoardStage({
   board,
   boardFxSignal,
   canAdvance,
   canGoPrev,
-  currentRecord,
+  clearSummary,
   currentLevel,
+  currentRecord,
+  createdSpecials,
   isFinalLevelCleared,
   level,
   levelScore,
   message,
+  onDismissClearSummary,
   onNext,
   onPrev,
   onRestart,
@@ -30,12 +52,15 @@ export default function GameBoardStage({
   boardFxSignal: BoardFxSignal | null
   canAdvance: boolean
   canGoPrev: boolean
+  clearSummary: LevelClearSummary | null
   currentLevel: number
   currentRecord?: LevelRecord
+  createdSpecials: CreatedSpecial[]
   isFinalLevelCleared: boolean
   level: LevelDefinition
   levelScore: number
   message: string
+  onDismissClearSummary: () => void
   onNext: () => void
   onPrev: () => void
   onRestart: () => void
@@ -104,16 +129,17 @@ export default function GameBoardStage({
                 row.map((tile, colIndex) => {
                   const isSelected = selected?.row === rowIndex && selected?.col === colIndex
                   const theme = tileTheme[tile.kind]
+                  const specialClass = tile.specialType ? `tile-special tile-special--${tile.specialType}` : ''
 
                   return (
                     <button
                       key={tile.id}
                       type="button"
-                      className={`tile ${theme.className} ${isSelected ? 'is-selected' : ''}`}
+                      className={`tile ${theme.className} ${specialClass} ${isSelected ? 'is-selected' : ''}`}
                       onClick={() => onTileClick({ row: rowIndex, col: colIndex })}
-                      aria-label={`${theme.label}色宝石 ${rowIndex + 1} 行 ${colIndex + 1} 列`}
+                      aria-label={`${theme.label}色宝石 ${tile.specialType ? ` ${tile.specialType} 特殊效果` : ''} ${rowIndex + 1} 行 ${colIndex + 1} 列`}
                     >
-                      <GemIcon kind={tile.kind} />
+                      <GemIcon kind={tile.kind} specialType={tile.specialType} />
                       <span className="tile__label">{theme.label}</span>
                     </button>
                   )
@@ -126,6 +152,25 @@ export default function GameBoardStage({
       </div>
 
       <p className="message-box">{message}</p>
+
+      {createdSpecials.length > 0 ? (
+        <p className="subtle-text special-created-note">
+          本次生成特殊宝石：
+          {createdSpecials.map((special, index) => (
+            <span key={`${special.position.row}-${special.position.col}-${index}`}>
+              {index > 0 ? '、' : ''}
+              {special.specialType === 'row'
+                ? '横向清行'
+                : special.specialType === 'column'
+                  ? '纵向清列'
+                  : special.specialType === 'bomb'
+                    ? '爆炸'
+                    : '彩虹'}
+            </span>
+          ))}
+          。
+        </p>
+      ) : null}
 
       {currentRecord ? (
         <p className="subtle-text best-record">
@@ -150,6 +195,58 @@ export default function GameBoardStage({
       ) : null}
 
       <p className="subtle-text board-stage__caption">当前关卡 {currentLevel} / 100 · 水晶棋盘强动画模式</p>
+
+      {clearSummary ? (
+        <div className="level-clear-modal" role="dialog" aria-modal="true" aria-labelledby="level-clear-title">
+          <div className="level-clear-modal__backdrop" onClick={onDismissClearSummary} />
+          <div className="level-clear-modal__panel card">
+            <p className="eyebrow">Level Clear</p>
+            <h3 id="level-clear-title">{clearSummary.levelName} 通关成功</h3>
+            <div className="level-clear-modal__stats">
+              <div>
+                <span>本关总分</span>
+                <strong>{formatScore(clearSummary.awardedScore)}</strong>
+              </div>
+              <div>
+                <span>时间奖励</span>
+                <strong>{formatScore(clearSummary.timeReward)}</strong>
+              </div>
+              <div>
+                <span>连锁次数</span>
+                <strong>{clearSummary.chains}</strong>
+              </div>
+              <div>
+                <span>清除数量</span>
+                <strong>{clearSummary.clearedTiles}</strong>
+              </div>
+            </div>
+            {clearSummary.createdSpecials.length > 0 ? (
+              <div className="level-clear-modal__specials">
+                <span>本回合生成的特殊宝石</span>
+                <div className="level-clear-modal__special-list">
+                  {clearSummary.createdSpecials.map((special, index) => (
+                    <div key={`${special.position.row}-${special.position.col}-${index}`} className="level-clear-modal__special-chip">
+                      <GemIcon kind={special.kind} specialType={special.specialType} />
+                      <span>{special.specialType}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <p className="subtle-text">
+              {clearSummary.recordImproved ? '已刷新本关最佳成绩。' : '本关最佳成绩未提升。'}
+            </p>
+            <div className="level-clear-modal__actions">
+              <button type="button" className="action-button secondary" onClick={onDismissClearSummary}>
+                继续查看
+              </button>
+              <button type="button" className="action-button" onClick={onNext} disabled={!canAdvance}>
+                下一关
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

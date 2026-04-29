@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { TileKind } from '../game/types'
+import type { SpecialType, TileKind } from '../game/types'
 
 const gemShapes: Record<TileKind, ReactNode> = {
   ruby: (
@@ -60,16 +60,29 @@ const gemShapes: Record<TileKind, ReactNode> = {
   ),
 }
 
-export default function GemIcon({ kind }: { kind: TileKind }) {
+const specialOverlays: Record<SpecialType, ReactNode> = {
+  row: <path className="gem-special gem-special--row" d="M18 50 H82" />,
+  column: <path className="gem-special gem-special--column" d="M50 18 V82" />,
+  bomb: <circle className="gem-special gem-special--bomb" cx="50" cy="50" r="15" />,
+  rainbow: (
+    <g className="gem-special gem-special--rainbow">
+      <circle cx="50" cy="50" r="17" />
+      <path d="M34 50a16 16 0 0 1 32 0" />
+    </g>
+  ),
+}
+
+export default function GemIcon({ kind, specialType }: { kind: TileKind; specialType?: SpecialType }) {
   return (
     <svg viewBox="0 0 100 100" className="gem-icon" aria-hidden="true" focusable="false">
       <defs>
-        <filter id={`gem-glow-${kind}`} x="-30%" y="-30%" width="160%" height="160%">
+        <filter id={`gem-glow-${kind}${specialType ?? 'plain'}`} x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="var(--gem-glow)" floodOpacity="0.75" />
         </filter>
       </defs>
-      <g filter={`url(#gem-glow-${kind})`}>
+      <g filter={`url(#gem-glow-${kind}${specialType ?? 'plain'})`}>
         {gemShapes[kind]}
+        {specialType ? specialOverlays[specialType] : null}
       </g>
     </svg>
   )

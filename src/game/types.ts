@@ -7,9 +7,12 @@ export type TileKind =
   | 'rose'
   | 'teal'
 
+export type SpecialType = 'row' | 'column' | 'bomb' | 'rainbow'
+
 export type Tile = {
   id: string
   kind: TileKind
+  specialType?: SpecialType
 }
 
 export type Board = Tile[][]
@@ -34,11 +37,27 @@ export type LevelDefinition = {
   handcrafted: boolean
 }
 
+export type MatchPattern = 'line-3' | 'line-4' | 'line-5' | 't-shape' | 'l-shape'
+
+export type MatchGroup = {
+  kind: TileKind
+  pattern: MatchPattern
+  positions: Position[]
+}
+
+export type CreatedSpecial = {
+  position: Position
+  kind: TileKind
+  specialType: SpecialType
+}
+
 export type CascadeResolution = {
   board: Board
   clearedTiles: number
   chains: number
   matchedGroups: number
+  matchGroups: MatchGroup[]
+  createdSpecials: CreatedSpecial[]
 }
 
 export type LeaderboardEntry = {

@@ -677,9 +677,115 @@
   margin-bottom: 4px;
 }
 
-.best-record,
-.leaderboard-message {
-  margin-top: 14px;
+.special-created-note {
+  margin-top: 12px;
+  color: #fde68a;
+}
+
+.tile--special {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -12px 20px rgba(15, 23, 42, 0.2),
+    0 0 0 2px rgba(250, 204, 21, 0.14),
+    0 0 34px rgba(192, 132, 252, 0.18),
+    0 20px 28px rgba(15, 23, 42, 0.3);
+}
+
+.tile--special-row::before,
+.tile--special-column::before,
+.tile--special-bomb::before,
+.tile--special-rainbow::before {
+  opacity: 0.96;
+}
+
+.tile--special-row {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -12px 20px rgba(15, 23, 42, 0.2),
+    0 0 0 2px rgba(125, 211, 252, 0.18),
+    0 0 36px rgba(125, 211, 252, 0.22),
+    0 20px 28px rgba(15, 23, 42, 0.3);
+}
+
+.tile--special-column {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -12px 20px rgba(15, 23, 42, 0.2),
+    0 0 0 2px rgba(167, 139, 250, 0.18),
+    0 0 36px rgba(192, 132, 252, 0.22),
+    0 20px 28px rgba(15, 23, 42, 0.3);
+}
+
+.tile--special-bomb {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -12px 20px rgba(15, 23, 42, 0.2),
+    0 0 0 2px rgba(251, 146, 60, 0.18),
+    0 0 42px rgba(251, 191, 36, 0.24),
+    0 20px 28px rgba(15, 23, 42, 0.3);
+}
+
+.tile--special-rainbow {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -12px 20px rgba(15, 23, 42, 0.2),
+    0 0 0 2px rgba(216, 180, 254, 0.2),
+    0 0 46px rgba(125, 211, 252, 0.26),
+    0 20px 28px rgba(15, 23, 42, 0.3);
+}
+
+.gem-icon--row .gem-special--row,
+.gem-icon--column .gem-special--column,
+.gem-icon--bomb .gem-special--bomb,
+.gem-icon--bomb .gem-special--bomb-core,
+.gem-icon--rainbow .gem-special--rainbow-core,
+.gem-icon--rainbow .gem-special--rainbow-ring {
+  display: block;
+}
+
+.gem-special {
+  display: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gem-special--row {
+  stroke: rgba(224, 242, 254, 0.9);
+  stroke-width: 10;
+}
+
+.gem-special--column {
+  stroke: rgba(233, 213, 255, 0.92);
+  stroke-width: 10;
+}
+
+.gem-special--bomb {
+  stroke: rgba(255, 241, 204, 0.95);
+  stroke-width: 4;
+}
+
+.gem-special--bomb-core {
+  fill: rgba(255, 255, 255, 0.68);
+  stroke: rgba(251, 191, 36, 0.85);
+  stroke-width: 3;
+}
+
+.gem-special--rainbow-core {
+  fill: url(#gem-rainbow-core-gradient);
+}
+
+.gem-special--rainbow-ring {
+  fill: none;
+  stroke-width: 4;
+}
+
+.gem-special--rainbow-ring-1 {
+  stroke: rgba(255, 255, 255, 0.88);
+}
+
+.gem-special--rainbow-ring-2 {
+  stroke: rgba(192, 132, 252, 0.72);
 }
 
 @media (max-width: 1100px) {
